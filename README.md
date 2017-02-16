@@ -1,201 +1,221 @@
+# Google_Map_fence_set 谷歌地图多（出入报警）围栏（附评价）：~c~
 
-# 【一】Google_Map_moniter 谷歌地图--后台聚合（区监控）
-## 1.运行
+### 1.运行
+
 ```
-* $ git pull
+* git clone ;
+* npm install
 * $ gulp;
 * 替换自己的key值。V3版本。
 ```
 
 
-## 2.业务流程
+### 2.项目说明
 
-* 进入页面是区的静态数据进行渲染。此项目是区（进行一层数据聚合），google控件加载；
-* 点击每个区下面进行区下面数据的实时监控。数据为实时刷新，第一次进行最优显示。
-* 点击被监控的点，进入追踪模式，被追踪的点上方有该点的信息板面，可以拓展更多信息。追踪时，地图最优显示，被追踪的点居于屏幕正中，移动过的地方有追踪的线。
-* 点击退出追踪，进入当前的监控的点的地图。数据为实时刷新，第一次进行最优显示。
-* 退出监控，退出到区的静态数据页面。（可进行区动态数据监控。但其实没有必要。）
+* 此项目配合 [谷歌监控点实时追踪](https://zc3hd.github.io/demo_Google_map_moniter_qu/) 的第二功能模块，对监控的点进行围栏设置。
+* 此项目我尽量是模仿百度地图围栏设置的JS写的面向对象，大家在学习的过程中可以参照百度围栏的JS的抒写：[百度围栏设置的面向对象JS文件](https://github.com/zc3hd/demo_BDmap_fence_set/blob/master/webapp/script/module/monitor/map_diyFence_set.js)
 
-### 2.1 控件栏渲染
-* 首先进入页面是，Google原生控件栏渲染，个人感觉比百度的控件栏好多了。所以没有进行控件重新替换。
+#### 2.1 围栏渲染
+
+* 点击区监控监控对象，拿到被监控对象的围栏信息，传入下面的对象中：
+
+```
+  this.fences = opts.fences;
+
+  //我这里模拟里一些围栏的数据
+  this.fences = [{
+    alarmType: 1,
+    center: [
+      { lng: 116.336691, lat: 40.006788 }
+    ],
+    fenceName: '围栏1',
+    radius: 10000,
+    shapeType: 0
+  }, {
+    alarmType: 0,
+    center: [
+      { lng: 116.336691, lat: 40.106788 },
+      { lng: 116.336691, lat: 40.207299 },
+      { lng: 116.536691, lat: 40.207299 },
+      { lng: 116.536691, lat: 40.106788 },
+    ],
+    fenceName: '围栏2',
+    radius: null,
+    shapeType: 1
+  }, ];
+```
+
+* 渲染拿回来的数据成围栏：（数据里面有区别圆形和多边形的区别的字段`这里shapeType：0代表圆形，1代表多边形`）这个地方和百度处理的一样：
+
+```
+  for (var i = 0; i < me.fences.length; i++) {
+    // 多边形展示
+    if (me.fences[i].shapeType == 1) {
+      me.f_show_duo(me.fences[i]);
+    }
+    // 圆形展示
+    else if (me.fences[i].shapeType == 0){
+      me.f_show_yuan(me.fences[i]);
+    }
+  }
+```
 
 ![](./webapp/readme_img/001.jpg)
 
-### 2.2 区静态数据渲染
-* 项目的选择和模式的选择都会走同一个函数，以得到不同的数据。
+#### 2.2 新增围栏
+
+* 点击新增围栏，弹窗进行围栏基本信息输入：界面和百度围栏写的一毛一样...
 
 ![](./webapp/readme_img/002.jpg)
 
-```
-            for (var i = 0; i < data.all.length; i++) {
-              marker_obj = me.m_draw_p(data.all[i]);
-              me.p_arr.push(marker_obj);
-              marker_arr.push(marker_obj.marker);
-            }
-```
-可以看到有两个地方在收集数据。me.p_arr用于清除数据，marker_arr用于展示数据最优显示。
-
-打marker的方式和百度的不一样，给marker设置label也不一样。这里的不一样造成需要返回marker和infoWindow两个作为属性的对象。
+* baiu:选项多边形围栏进行绘制，绘画之前进行提示：多边形绘制完成需双击：
+* goole:没有进行提示，因为google的多边形绘制闭合时，鼠标会自动变成小手状，给用户很好的提示了已经。
 
 ![](./webapp/readme_img/003.jpg)
 
-### 2.3 marker设置label
+```
+  var type = me.shapeType = $('#type input[name="type"]:checked').val();
+  if (type == 0) {
+    me.f_add_yuan();
+  }
+  // 多边形
+  else if (type == 1) {
+    //baidu:layer.msg('温馨提示：结束多边形绘制，请双击鼠标！');
+    me.f_add_duo();
+  }
+```
 
-* google自带的label其实挺好用。但是信息显示框样式不好修改，而且右侧有关闭按钮。
+#### 2.3 保存数据
+
+* baidu：每次绘制一个围栏都向后台进行发送围栏的所有数据进行保存：代码如下：
+
+```
+  f_add_done: function(argument) {
+    var me = this;
+    me.drawingManager.addEventListener('overlaycomplete', function(e) {
+      me.drawingManager.close();
+      // 围栏报警参数
+      e.overlay.alarmType = me.alarmType;
+      // 围栏的形状参数
+      e.overlay.shapeType = me.shapeType;
+      // 围栏名称
+      e.overlay.fenceName = me.fenceName;
+
+      me.f_all();
+    });
+  },
+  // 所有围栏的事件
+  f_all: function() {
+    /* body... */
+    var me = this;
+    var all_f = me.map.getOverlays();
+    // 显示信息事件
+    me.f_mouseover(all_f);
+    // 所有围栏的点击事件
+    me.f_click(all_f);
+    // 向后台发数据的事件
+    me.f_send(all_f);
+  },
+```
+
+* google：这里本来不是单独的一项，但是在保存数据的地方和百度有巨大的区别，以至于年前我在想自己的代码可能按照编辑百度围栏那样的思想不可实现。年后和后台沟通说可能会要修改保存的接口。因为现在项目的需要有需要百度和google随时切换的功能。后台尽量是用一个接口，但是google这个蛋疼没有一个非常关键的API，就是获取页面的全部的覆盖物！！！坑爹啊！！！
+* 但是我想了下，可以不用改接口，自己去实现获取地图全部的覆盖物的方法如下。另起一条吧，显得重要！O(∩_∩)O
+
+#### 2.4 收集所有
+
+* 先说下保存围栏的数据是怎么保存的，我觉得这样不对，但是开头也是我给后台这样的思想，后来发现不合适也是我说的不合适，虽打了自己的脸，这一版就先这样吧。
+* 所有的围栏的有关的接口就一个，那就是获取页面上所有的覆盖物，然后遍历拿到的覆盖物的数据，组装自己的数据，发给后台。后台不管以前的是什么数据，直接把原来的数据全部覆盖。这样就有一个不合适的地方，如何我只修改了一个围栏，但是我又所有的数据保存了一次。仔细想是非常不合适的。从上面看百度就是这样写的。
+* google地图非常蛋疼没有获取页面所有的覆盖物的API。看哥怎么给你收集所有的覆盖物：往下看
+* 首先我在构造函数中挂载了两个全局属性，一个是围栏的唯一标识用于区分围栏，一个是收集围栏的容器：
+
+```
+    // 这里需要注意，百度地图有获取页面所有的覆盖物的API，google没有，我需要自己定义一个类ID的唯一标识
+    // 围栏的唯一标识
+    this.f_id = 0;
+    // 全局围栏数组
+    this.f_arrs = [];
+```
+
+* 然后在第一次进入页面时，如果有围栏的数据，渲染围栏的时候，就给拿到这个围栏DOM，我给它一个唯一ID，属性为f_id，把拿到的DOM收集到f_arrs数组中。这样一开始，我就先拿到了页面上已经有的围栏的数组。
 
 ![](./webapp/readme_img/004.jpg)
 
-* 这里采用了一个包，自定义的信息版。可以随意设置关闭按钮，透明图，相对marker位置。[源码和案例]();
-
-### 2.4 点击区，进入区下面数据的实时监控
-
-* 记录点击过的区数据，方便退出追踪时，进入该点击区的下面的监控页面。
+* 接下来，我们新增一个围栏，注意我的围栏名字是 y1。
 
 ![](./webapp/readme_img/005.jpg)
 
-* google的自定义控件比百度简单很多。[源码]()
-
-```
-          me.back_to_qu = document.createElement('div');
-          new NewControl({
-            p_dom: me.back_to_qu,
-            map: me.map,
-            offset: ['10px', 0, 0, '10px'],
-            btns: ['退出监控tuij']
-          }).init();
-```
-
-* 打自定义marker也比较简单：
-
-```
-          var marker = new me.Gmap.Marker({
-            position: {
-              lat: data.position.lat,
-              lng: data.position.lng
-            },
-            map: me.map,
-            title: '设备号：' + data.name,
-            icon: '../../../images/car_online.png'
-          });
-```
-
-* 实时渲染时的清除数据（相比百度比较笨重）（和点击区，进入区监控数据之前，对全部区数据进行清除一样）：
-
-```
-            // 清除数据
-            if (me.qu_xm_arr.length != 0) {
-              for (var i = 0; i < me.qu_xm_arr.length; i++) {
-                me.qu_xm_arr[i].setMap(null);
-              };
-            }
-```
-
-区数据的清除：marker要清除，label要关闭的。
-
-```
-          // 清除数据，容器重置
-          for (var i = 0; i < arr.length; i++) {
-            // 清除点
-            arr[i].marker.setMap(null);
-            // 清除信息框
-            arr[i].infowindow.close();
-          };
-```
-
-* 最优显示数据（相比百度挺笨重），非官方解释：用到LatLngBounds这个类，官方API说明为：LatLngBounds 实例代表通过地理坐标表示的矩形，包含与 180度子午线相交的矩形。该类通过extend((point:LatLng)添加位置信息，最后通过map.fitBounds(bounds:LatLngBounds)来让地图适应该bounds下面的点集，从而达到展示标注在最佳视野的效果。
-
-```
-        // 设置最优视角
-        m_setVeiwPort: function(arr) {
-          /* body... */
-          var me = this;
-          var bounds = new me.Gmap.LatLngBounds();
-          //读取标注点的位置坐标，加入LatLngBounds  
-          for (var i = 0; i < arr.length; i++) {
-            bounds.extend(arr[i].getPosition());
-          }
-          //调整map，使其适应LatLngBounds,实现展示最佳视野的功能
-          me.map.fitBounds(bounds);
-        },
-```
-
-### 2.5 点击被监控的点，进入追踪模式
-* 追踪模式：
+* 注意在新增完向后台发送的数据：
 
 ![](./webapp/readme_img/006.jpg)
 
-* 点击一个被监控的点，进入追踪，去除【退出监控】控件：
-```
-<!-- 创建 -->
-me.back_to_qu_xm = document.createElement('div');
-<!-- 删除 -->
-me.map.controls[google.maps.ControlPosition.LEFT_TOP].clear(me.back_to_qu_xm);
-```
+* 设置每次用工具画完后，进行一次id绑定和dom的收集，代码实现：
 
-* 先打点记录marker：
-```
-<!-- 收集点me.zz_p，me.zz_p_label 为空时，进行收集和打点 -->
-          if (me.zz_p == null) {
-            // 根据ID请求到数据
-            var marker = new me.Gmap.Marker({
-              position: {
-                lat: data[0].position.lat,
-                lng: data[0].position.lng
-              },
-              map: me.map,
-              icon: '../../../images/car_online.png',
-              anchorPoint: new google.maps.Point({ x: 50, y: 50 })
-            });
-            var str = '<div class="markLabel">' +
-              '<span class="labelName" id="devName">设备名称：' + data[0].name +
-              '<br />' +
-              '</span>' +
-              '<div class="labelArrow"></div>' +
-              '</div>';
-            var infowindow = me.m_p_label(str);
-            infowindow.open(me.map, marker);
-            // 收集marker
-            me.zz_p = marker;
-            me.zz_p_label = infowindow;
+![](./webapp/readme_img/007.jpg)
 
-            view_arr.push(marker);
-          }
-```
+* 修改一个围栏完成，也向后台发送数据，这里因为f_arrs数组中保存的是每个DOM对象，对象的每个属性是什么？是索引啊，随意一开始给每个dom绑定的点击事件，又把dom传回去修改属性是没有问题的，代码实现：
 
-* 移动marker，划线，收集所有的线（便于清除）：
+![](./webapp/readme_img/008.jpg)
+
+* 同样删除一个围栏，也向后台发送数据。这里绑定的唯一ID就派上用场了，同样绑定的事件，拿到dom，判断数组中那个DOM的id和当前点击的DOM的id一样，就删除一个数组中特定的这个元素，因为有下标可以找到这个元素，代码实现如下：
+
+![](./webapp/readme_img/009.jpg)
+
+* 然Baidu：一个API全部搞定，呵呵
 
 ```
-          else {
-            var newPoint = new google.maps.LatLng(data[0].position.lat, data[0].position.lng);
-            var oldPoint = me.zz_p.getPosition();
-            // 收集所有的折线
-            me.zz_p_line.push(me.qu_xm_p_line([oldPoint, newPoint]));
-            // 移动到新的点上
-            me.zz_p.setPosition(newPoint);
-            view_arr.push(me.zz_p);
-          }
-          <!-- 划线 -->
-          qu_xm_p_line: function(arr) {
-            // body... 
-            var me = this;
-            var flightPlanCoordinates = arr;
-            var flightPath = new me.Gmap.Polyline({
-              path: flightPlanCoordinates,
-              geodesic: true,
-              strokeColor: '#21536d',
-              strokeOpacity: 0.8,
-              strokeWeight: 4
-            });
-            flightPath.setMap(me.map);
-            return flightPath;
-          },
+  var all_f = me.map.getOverlays();
+  me.f_send(all_f);
 ```
 
-## 3.思路及注意
+* 综上，google区别于baidu在围栏这块，最大的一个坑已经补上。下面的信息都和百度一样。
 
-* 本人是先进行百度地图的各种，然后是由于业务要求进行google这个高大上的地图，感觉没有百度用的顺手
-* 以 HTML5 形式声明您的应用，注意请求的src.以通过请求 http://maps.googleapis.com/（对于中国用户，则是 http://maps.google.cn）通过 HTTP 加载 Google Maps JavaScript API。
+#### 2.5 信息提示
 
-## 4.MIT
-* 后期补充mongoDB数据库进行数据请求。 
-* 作为框架修改可以直接拿来就用。
+* 鼠标放上去绘制好的围栏或一开始渲染的围栏上面，进行基本信息提示，因为这个提示不像marker自带的函数方法进行设置，这里我自己写了一个弹窗显示：
+
+```
+  f_show_e: function(argument) {
+    /* body... */
+    var me = this;
+    var all_f = me.map.getOverlays();
+    // 显示信息事件
+    me.f_mouseover(all_f);
+    // 所有围栏的点击事件
+    me.f_click(all_f);
+  },
+  f_mouseover: function(arr) {
+    var me = this;
+    for (var i = 0; i < arr.length; i++) {
+      arr[i].removeEventListener('mouseover');
+      arr[i].addEventListener('mouseover', function(e) {
+        var str = '';
+        if (e.target.alarmType == 1) {
+          str = '出围栏报警';
+        } else {
+          str = '入围栏报警';
+        }
+        e.target.indexLayer = layer.msg('围栏名称：' + e.target.fenceName + '<span style="margin-left:20px;"></span>报警条件：' + str, {
+          time: 0, //不自动关闭
+        });
+      });
+      arr[i].removeEventListener('mouseout');
+      arr[i].addEventListener('mouseout', function(e) {
+        layer.close(e.target.indexLayer);
+      });
+    }
+  },
+```
+
+### 3.设计思想
+
+* 围栏和列表一样，也是增删改查的操作，前端后台一样，由于一开始我的误导，现在后台除了查询，剩下新增，修改，删除都一样成为一个接口，就是覆盖原来的数据。
+* 编辑的过程，我尽量是按照百度围栏的的构造函数写，因为好修改，好管理。你懂得。
+* 最大的坑就是google没有一个成型的API是获取页面所有的覆盖物。
+
+### 4.使用感受
+
+* 先做个小总结，后期专门弄一篇博客说这个区别吧。google是前辈，我是先用的baidu，后期再用google设计项目时，发现好多API的名字！对，就是名字，Baidu和google一毛一样，你最起码改一个名字噻，名字就是一样好么。
+* 个人感觉还是百度地图的API更好用，更现实。从上面那个收集所有的覆盖物就可以看出来。
+* 一开始保存围栏的保存的误导，也是致使这个坑出现的原因，所有也有我的原因。
+
+

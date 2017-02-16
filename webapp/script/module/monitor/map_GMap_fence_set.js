@@ -25,19 +25,18 @@
       center: [
         { lng: 116.336691, lat: 40.006788 }
       ],
-      name: '围栏1',
-      radius: 46.0300882256396,
+      fenceName: '围栏1',
+      radius: 10000,
       shapeType: 0
     }, {
       alarmType: 0,
       center: [
-        { lng: 116.338075, lat: 40.006931 },
-        { lng: 116.339081, lat: 40.007299 },
-        { lng: 116.339427, lat: 40.006681 },
-        { lng: 116.338623, lat: 40.005982 },
-        { lng: 116.337061, lat: 40.006263 }
+        { lng: 116.336691, lat: 40.106788 },
+        { lng: 116.336691, lat: 40.207299 },
+        { lng: 116.536691, lat: 40.207299 },
+        { lng: 116.536691, lat: 40.106788 },
       ],
-      name: '围栏2',
+      fenceName: '围栏2',
       radius: null,
       shapeType: 1
     }, ];
@@ -61,6 +60,13 @@
 
     // 当前点击的围栏
     this.active_f = null;
+
+
+    // 这里需要注意，百度地图有获取页面所有的覆盖物的API，google没有，我需要自己定义一个类ID的唯一标识
+    // 围栏的唯一标识
+    this.f_id = 0;
+    // 全局围栏数组
+    this.f_arrs = [];
 
   };
   map_GMap_fence_set.prototype = {
@@ -114,6 +120,7 @@
     //控件自定义初始化
     init_setBaner: function() {
       var me = this;
+      // 目前没有自定义
     },
     // -----------------------------------------初始化事件
     init_event: function() {
@@ -132,21 +139,24 @@
       var fn = {
         f_init: function(argument) {
           var me = this;
+          // 添加绘画工具
+          me.f_tools();
           // 添加围栏
           me.f_add();
           // 所有的围栏的显示
           me.f_show_init();
-          // 添加绘画工具
-          me.f_tools();
         },
         // 添加画图工具
         f_tools: function(argument) {
           /* body... */
           var me = this;
           var style = {
+            strokeColor: 'blue',
+            strokeOpacity: 1,
+            strokeWeight: 1,
             fillColor: 'blue',
             fillOpacity: 0.1,
-            strokeWeight: 1,
+            // strokeWeight: 1,
             clickable: true,
             editable: false,
             zIndex: 1
@@ -171,39 +181,54 @@
           drawingManager.setMap(me.map);
           me.f_add_done();
         },
+        // 画完的执行
         f_add_done: function() {
           /* body... */
           var me = this;
+          // 圆完成时的事件函数
           me.drawingManager.addListener('circlecomplete', function(yuan) {
-            /* body... */
-            // 关闭绘画模式
-            me.drawingManager.setDrawingMode(google.maps.drawing.OverlayType.null);
-
-            yuan.alarmType = me.alarmType;
-            // 围栏的形状参数
-            yuan.shapeType = me.shapeType;
-            // 围栏名称
-            yuan.fenceName = me.fenceName;
-
-            // 换完圆形，给当前圆形加一个点击事件。
-
-            yuan.addListener('click', function(e) {
-              me.f_click(yuan);
-            });
-
-            // 显示功能
-            me.f_mouseevent(yuan);
-          })
+            me.f_add_done_event(yuan);
+          });
+          // 多边形的事件函数
+          me.drawingManager.addListener('polygoncomplete', function(duo) {
+            me.f_add_done_event(duo);
+          });
         },
-        f_add_done_send: function(argument) {
+        // 画完的事件函数
+        f_add_done_event: function(dom) {
+          /* body... */
+          var me = this;
+          // 唯一ID标识
+          me.f_id++;
+          // 关闭绘画模式
+          me.drawingManager.setDrawingMode(google.maps.drawing.OverlayType.null);
+          // 标记唯一id
+          dom.f_id = me.f_id;
+          // 报警参数
+          dom.alarmType = me.alarmType;
+          // 围栏的形状参数
+          dom.shapeType = me.shapeType;
+          // 围栏名称
+          dom.fenceName = me.fenceName;
 
+          // 收集为数组
+          me.f_arrs.push(dom);
+          // 后台进行发送
+          console.log('绘制完毕后的发送');
+          me.f_send(me.f_arrs);
+
+          // 给当前圆形加一个点击事件。
+          me.f_click(dom);
+          // 绑定个显示属性
+          me.f_mouseevent(dom);
         },
+        f_add_done_send: function(argument) {},
         // --------------------------------------------------------显示围栏
         f_show_init: function(argument) {
           /* body... */
           var me = this;
           me.f_show();
-          me.f_show_e();
+          // me.f_show_e();
         },
         f_show: function() {
           /* body... */
@@ -213,7 +238,7 @@
           }
           for (var i = 0; i < me.fences.length; i++) {
             // 多边形展示
-            if (me.fences[i].shapeType == 5) {
+            if (me.fences[i].shapeType == 1) {
               me.f_show_duo(me.fences[i]);
             }
             // 圆形展示
@@ -222,7 +247,108 @@
             }
           }
         },
-
+        // 多边形围栏
+        f_show_duo: function(data) {
+          /* body... */
+          var me = this;
+          var dom = new google.maps.Polygon({
+            paths: data.center,
+            strokeColor: 'blue',
+            strokeOpacity: 1,
+            strokeWeight: 1,
+            fillColor: 'blue',
+            fillOpacity: 0.1,
+            map: me.map,
+            clickable: true
+          });
+          me.f_show_common(dom,data);
+        },
+        // 圆形
+        f_show_yuan: function(data) {
+          /* body... */
+          var me = this;
+          var dom = new google.maps.Circle({
+            strokeColor: 'blue',
+            strokeOpacity: 1,
+            strokeWeight: 1,
+            fillColor: 'blue',
+            fillOpacity: 0.1,
+            map: me.map,
+            center: data.center[0],
+            radius: data.radius,
+            clickable: true
+          });
+          me.f_show_common(dom,data);
+        },
+        // 展示覆盖物的公共处理
+        f_show_common: function(dom,data) {
+          /* body... */
+          var me = this;
+          // 唯一ID标识
+          me.f_id++;
+          // 标记唯一id
+          dom.f_id = me.f_id;
+          // 报警参数
+          dom.alarmType = data.alarmType;
+          // 围栏的形状参数
+          dom.shapeType = data.shapeType;
+          // 围栏名称
+          dom.fenceName = data.fenceName;
+          // 给当前圆形加一个点击事件。
+          me.f_click(dom);
+          // 绑定个显示属性
+          me.f_mouseevent(dom);
+          // 收集为数组
+          me.f_arrs.push(dom);
+        },
+        // --------------------------------------------------------后台保存
+        f_send: function(arr) {
+          /* body... */
+          var me = this;
+          var send_data = {
+            sn: me.sn,
+            fences: []
+          };
+          var lastData = me.f_send_handle(send_data, arr)
+          console.log(lastData);
+        },
+        // 发送之前的处理
+        f_send_handle: function(send_data, arr) {
+          /* body... */
+          var me = this;
+          for (var i = 0; i < arr.length; i++) {
+            var fence = {
+              name: '',
+              radius: null,
+              center: [],
+              alarmType: null,
+              shapeType: null
+            };
+            // 圆形
+            if (arr[i].shapeType == 0) {
+              // 百度和googleAPI非常非常像
+              fence.name = arr[i].fenceName;
+              fence.radius = arr[i].getRadius();
+              fence.center[0] = { lng: arr[i].getCenter().lng(), lat: arr[i].getCenter().lat() };
+              fence.alarmType = arr[i].alarmType;
+              fence.shapeType = arr[i].shapeType;
+            }
+            // 多边形
+            else if (arr[i].shapeType == 1) {
+              fence.name = arr[i].fenceName;
+              fence.radius = null;
+              var p_arr = arr[i].getPaths().b[0].b;
+              for (var j = 0; j < p_arr.length; j++) {
+                fence.center.push({ lng: p_arr[j].lng(), lat: p_arr[j].lat() });
+              }
+              fence.alarmType = arr[i].alarmType;
+              fence.shapeType = arr[i].shapeType;
+            }
+            // console.log(fence);
+            send_data.fences.push(fence);
+          };
+          return send_data;
+        },
         // --------------------------------------------------------显示功能
         f_mouseevent: function(yuan) {
           var me = this;
@@ -233,6 +359,7 @@
             } else {
               str = '入围栏报警';
             }
+
             yuan.indexLayer = layer.msg('围栏名称：' + yuan.fenceName + '<span style="margin-left:20px;"></span>报警条件：' + str, {
               time: 0,
             });
@@ -247,16 +374,18 @@
         f_click: function(dom) {
           /* body... */
           var me = this;
-          // 没有记录点击的围栏
-          if (me.active_f == null) {
-            // 收集当前围栏
-            me.active_f = dom;
-            me.f_edit(dom);
-          }
-          // 记录点击的围栏
-          else {
-            layer.msg('请完成围栏编辑，在进行其他操作！')
-          }
+          dom.addListener('click', function(e) {
+            // 没有记录点击的围栏
+            if (me.active_f == null) {
+              // 收集当前围栏
+              me.active_f = dom;
+              me.f_edit(dom);
+            }
+            // 记录点击的围栏
+            else {
+              layer.msg('请完成围栏编辑，在进行其他操作！')
+            }
+          });
         },
         f_edit: function(dom) {
           var me = this;
@@ -286,6 +415,7 @@
           var me = this;
           $('#dom_save').unbind().on('click', function() {
             var ck = '';
+            // 反选设置
             if (dom.alarmType == 0) {
               ck = '<input name = "alarm" type = "radio" value = "0" checked = "checked" /><span class="f_p_one">出围栏报警</span>' +
                 '<input name = "alarm" type = "radio" value = "1"  /><span class="f_p_one">入围栏报警</span>';
@@ -293,6 +423,7 @@
               ck = '<input name = "alarm" type = "radio" value = "0"  /><span class="f_p_one">出围栏报警</span>' +
                 '<input name = "alarm" type = "radio" value = "1" checked = "checked" /><span class="f_p_one">入围栏报警</span>';
             };
+            // 弹窗
             var str = '' +
               '<p  class="f_p">' +
               '<span> 围栏名称： </span>' +
@@ -320,13 +451,16 @@
                 layer.close(index);
 
                 dom.setOptions({ fillColor: 'blue' });
+                // 退出编辑模式
                 dom.setEditable(false);
                 // 清空容器
                 me.active_f = null;
                 // 清除保存删除按钮
                 me.map.controls[google.maps.ControlPosition.LEFT_TOP].clear(me.btn_saveDel_f);
-                // 后台保存围栏
 
+                // 后台保存围栏
+                console.log('保存围栏后的发送');
+                me.f_send(me.f_arrs);
                 // 添加围栏
                 me.f_add();
               },
@@ -343,6 +477,14 @@
             dom.setMap(null);
             // 清空容器
             me.active_f = null;
+
+            for (var i = 0; i < me.f_arrs.length; i++) {
+              if (me.f_arrs[i].f_id == dom.f_id) {
+                me.f_arrs.splice(i, 1);
+              }
+            }
+            console.log('删除后的发送');
+            me.f_send(me.f_arrs);
             me.map.controls[google.maps.ControlPosition.LEFT_TOP].clear(me.btn_saveDel_f);
             // 后台保存围栏
 
@@ -366,7 +508,6 @@
             // me.map.controls[google.maps.ControlPosition.LEFT_TOP].clear(me.btn_add_f);
             me.f_add_e();
           });
-
         },
         // 点击添加围栏的事件函数
         f_add_e: function() {
@@ -443,17 +584,6 @@
           var me = this;
           me.drawingManager.setDrawingMode(google.maps.drawing.OverlayType.POLYGON)
         },
-
-
-
-
-
-
-
-
-
-
-
         // ---------------------------------------------------------公用函数
         // 清除全部数据
         m_all_clear: function(arr) {
